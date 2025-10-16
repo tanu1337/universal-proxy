@@ -28,39 +28,61 @@ app.get('/health', (_, res) => {
   });
 });
 
-// Universal proxy route
+// 🔍 Universal proxy route
 app.all('*', async (req, res) => {
   const targetUrl = `${BASE_URL}${req.originalUrl}`;
-  console.log(`[${req.method}] → ${targetUrl}`);
+  console.log(`\n──────────────────────────────────────────────`);
+  console.log(`🛰️  [${req.method}] ${targetUrl}`);
+  console.log(`──────────────────────────────────────────────`);
+
+  // Log incoming headers
+  console.log('📥 Incoming Request Headers:');
+  console.table(req.headers);
 
   try {
+    // Prepare outgoing headers (remove Host so axios sets correctly)
+    const outgoingHeaders = { ...req.headers, host: undefined };
+    console.log('\n📤 Outgoing Request Headers (to target):');
+    console.table(outgoingHeaders);
+
+    // Perform the proxy request
     const response = await axios({
       method: req.method,
       url: targetUrl,
-      headers: { ...req.headers, host: undefined },
+      headers: outgoingHeaders,
       data: req.body,
       timeout: 60000,
       responseType: 'arraybuffer',
       validateStatus: () => true
     });
 
+    // Log response headers
+    console.log('\n📦 Response Headers (from target):');
+    console.table(response.headers);
+    console.log(`\n✅ Response Status: ${response.status}\n`);
+
+    // Forward headers to client
     for (const [key, value] of Object.entries(response.headers)) {
       res.setHeader(key, value);
     }
 
     res.status(response.status).send(Buffer.from(response.data));
+
   } catch (err) {
-    console.error('Proxy Error:', err.message);
+    console.error('\n❌ Proxy Error:', err.message);
+
     res.status(err.response?.status || 500).json({
       status: false,
       message: 'Proxy error',
-      detail: err.message
+      detail: err.message,
+      stack: err.stack
     });
   }
 });
 
 // Start server
 app.listen(PORT, () => {
-  console.log(`Universal Proxy running on port ${PORT}`);
-  console.log(`Forwarding all requests to: ${BASE_URL}`);
+  console.log(`\n🌐 Universal Proxy running on port ${PORT}`);
+  console.log(`➡️  Forwarding all requests to: ${BASE_URL}`);
+  console.log(`──────────────────────────────────────────────`);
 });
