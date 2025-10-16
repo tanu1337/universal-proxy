@@ -7,7 +7,7 @@ const app = express();
 
 // Base URL and Port
 const BASE_URL = process.env.BASE_URL;
-const PORT = 3000;
+const PORT = process.env.PORT || 8080;
 
 // Enable CORS for all
 app.use(cors({
