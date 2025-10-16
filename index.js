@@ -19,6 +19,15 @@ app.use(cors({
 // Accept any body (binary-safe)
 app.use(bodyParser.raw({ type: '*/*', limit: '100mb' }));
 
+// Health check
+app.get('/health', (_, res) => {
+  res.json({
+    status: true,
+    message: 'Universal Proxy running',
+    forwarding: BASE_URL
+  });
+});
+
 // Universal proxy route
 app.all('*', async (req, res) => {
   const targetUrl = `${BASE_URL}${req.originalUrl}`;
@@ -48,15 +57,6 @@ app.all('*', async (req, res) => {
       detail: err.message
     });
   }
-});
-
-// Health check
-app.get('/', (_, res) => {
-  res.json({
-    status: true,
-    message: 'Universal Proxy running',
-    forwarding: BASE_URL
-  });
 });
 
 // Start server
