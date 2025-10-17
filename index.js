@@ -2,6 +2,8 @@ const express = require('express');
 const axios = require('axios');
 const cors = require('cors');
 const bodyParser = require('body-parser');
+const http = require('http');
+const https = require('https');
 
 const app = express();
 
@@ -9,7 +11,7 @@ const app = express();
 const BASE_URL = process.env.BASE_URL;
 const PORT = process.env.PORT || 8080;
 
-// Enable CORS for all
+// Enable CORS
 app.use(cors({
   origin: '*',
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
@@ -28,54 +30,37 @@ app.get('/health', (_, res) => {
   });
 });
 
-// 🔍 Universal proxy route
+// Universal proxy route (streaming)
 app.all('*', async (req, res) => {
   const targetUrl = `${BASE_URL}${req.originalUrl}`;
-  console.log(`\n──────────────────────────────────────────────`);
-  console.log(`🛰️  [${req.method}] ${targetUrl}`);
-  console.log(`──────────────────────────────────────────────`);
-
-  // Log incoming headers
-  console.log('📥 Incoming Request Headers:');
-  console.table(req.headers);
 
   try {
-    // Prepare outgoing headers (remove Host so axios sets correctly)
-    const outgoingHeaders = { ...req.headers, host: undefined };
-    console.log('\n📤 Outgoing Request Headers (to target):');
-    console.table(outgoingHeaders);
+    const safeHeaders = Object.fromEntries(
+      Object.entries(req.headers).filter(
+        ([k]) => !['host', 'content-length', 'content-encoding', 'connection'].includes(k.toLowerCase())
+      )
+    );
 
-    // Perform the proxy request
     const response = await axios({
       method: req.method,
       url: targetUrl,
-      headers: outgoingHeaders,
+      headers: safeHeaders,
       data: req.body,
-      timeout: 60000,
-      responseType: 'arraybuffer',
-      validateStatus: () => true
+      responseType: 'stream',
+      validateStatus: () => true,
+      httpAgent: new http.Agent({ keepAlive: true }),
+      httpsAgent: new https.Agent({ keepAlive: true })
     });
 
-    // Log response headers
-    console.log('\n📦 Response Headers (from target):');
-    console.table(response.headers);
-    console.log(`\n✅ Response Status: ${response.status}\n`);
-
-    // Forward headers to client
-    for (const [key, value] of Object.entries(response.headers)) {
-      res.setHeader(key, value);
-    }
-
-    res.status(response.status).send(Buffer.from(response.data));
+    for (const [k, v] of Object.entries(response.headers)) res.setHeader(k, v);
+    res.status(response.status);
+    response.data.pipe(res);
 
   } catch (err) {
-    console.error('\n❌ Proxy Error:', err.message);
-
     res.status(err.response?.status || 500).json({
       status: false,
       message: 'Proxy error',
-      detail: err.message,
-      stack: err.stack
+      detail: err.message
     });
   }
 });
@@ -84,5 +69,4 @@ app.all('*', async (req, res) => {
 app.listen(PORT, () => {
   console.log(`\n🌐 Universal Proxy running on port ${PORT}`);
   console.log(`➡️  Forwarding all requests to: ${BASE_URL}`);
-  console.log(`──────────────────────────────────────────────`);
 });
